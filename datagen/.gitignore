@@ -1,0 +1,15 @@
+.env
+raw/*
+!raw/.gitkeep
+work/*
+!work/.gitkeep
+out/*
+!out/.gitkeep
+*_local/
+node_modules/
+datagen_venv/
+aider_venv/
+venv/
+__pycache__/
+*.log
+.DS_Store

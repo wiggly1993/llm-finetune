@@ -1,3 +1,16 @@
 *.log
 unsloth_compiled_cache/
 __pycache__/
+.env
+raw/*
+!raw/.gitkeep
+work/*
+!work/.gitkeep
+out/*
+!out/.gitkeep
+*_local/
+node_modules/
+datagen_venv/
+aider_venv/
+venv/
+.DS_Store
