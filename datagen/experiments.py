@@ -3,6 +3,7 @@ from apply_check import diff_applies
 from aider.coders.udiff_coder import find_diffs, normalize_hunk, do_replace
 from pathlib import Path
 from split_reply import split_reply
+import json, re, sys
 
 from task_filter import task_is_good
 from validate import build_diff, split_reply
@@ -36,7 +37,7 @@ if __name__ == "__main__":
 
     #print(repr(diff))
 
-    import json, re, sys
+
 
     path = sys.argv[1]
     total = 0

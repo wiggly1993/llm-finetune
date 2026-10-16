@@ -6,7 +6,7 @@ from split_reply import split_reply
 
 
 
-def task_is_good(d):
+def task_is_good(d, lang):
     # first diff applies
     if not diff_applies(d=d):
         return False, "diff applies did not work"
@@ -14,7 +14,7 @@ def task_is_good(d):
     if not plan_validation(d=d):
         return False, "Plan is too long"
 
-    value, info_text = tests_validation(d=d)
+    value, info_text = tests_validation(d, lang)
     if value:
         return True, ""
     else:
@@ -26,7 +26,7 @@ def task_is_good(d):
 if __name__ == "__main__":
     starting_point = Path(__file__).parent
 
-    full_path_ds_reponse = starting_point / "raw" / "test_1.txt"
+    full_path_ds_reponse = starting_point / "raw" / "python" /"python_1.txt"
     with open(full_path_ds_reponse, encoding="utf-8") as f:
         raw_ds_output = f.read()
         d = split_reply(text=raw_ds_output)

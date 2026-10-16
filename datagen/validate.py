@@ -8,6 +8,7 @@ from split_reply import split_reply
 
 starting_point = Path(__file__).parent
 
+
 def run_python_ds_tests(code, d):
     tests = d["tests"]
 
@@ -241,27 +242,38 @@ def run_java_ds_tests(code, d):
 
 
 
-def tests_validation(d: dict):
+def tests_validation(d: dict, lang):
     '''
-    most important: 
+    most important:
     it checks whether the solutions given by ds pass (expect: pass)
     it also checks whether the stubs alone would pass (expect: fail)
     '''
-    # check whether solution passes the tests (expect: 0)
-    code = d["solution"]
-    #tests = d["tests"]
-    val_result_sol = run_java_ds_tests(code, d)
+    if lang == "python":
+        run_tests = run_python_ds_tests
+    elif lang == "javascript":
+        run_tests = run_js_ds_tests
+    elif lang == "cpp":
+        run_tests = run_cpp_ds_tests
+    elif lang == "rust":
+        run_tests = run_rust_ds_tests
+    elif lang == "go":
+        run_tests = run_go_ds_tests
+    elif lang == "java":
+        run_tests = run_java_ds_tests
+    else:
+        raise ValueError(f"unknown lang: {lang}")
+
+    # solution must pass (expect: 0)
+    val_result_sol = run_tests(d["solution"], d)
     info_text_sol = ""
     if val_result_sol != 0:
         info_text_sol = "solution fails tests"
 
-    # check whether stub fails the tests (expect: 1)
-    code = d["stub"]
-    val_result_stub = run_java_ds_tests(code, d)
+    # stub must fail (expect: not 0)
+    val_result_stub = run_tests(d["stub"], d)
     info_text_stub = ""
     if val_result_stub == 0:
         info_text_stub = "stub passes the test which is bad!!"
-
 
     if val_result_sol == 0 and val_result_stub != 0:
         return True, ""
@@ -304,7 +316,7 @@ def build_diff(stub, solution, filename):
 if __name__ == "__main__":
 
 
-    full_path_ds_reponse = starting_point / "raw" / "test_1.txt"
+    full_path_ds_reponse = starting_point / "raw" / "python" /"python_1.txt"
     with open(full_path_ds_reponse, encoding="utf-8") as f:
         raw_ds_output = f.read()
         d = split_reply(text=raw_ds_output)
@@ -312,4 +324,10 @@ if __name__ == "__main__":
 
     # print(run_ds_tests(d["stub"], d["tests"]))
     # print(tests_validation(d))
-    print(build_diff(d["stub"], d["solution"], d["filename"]))
+    # print(build_diff(d["stub"], d["solution"], d["filename"]))
+
+    returncode = run_python_ds_tests(d["stub"], d)
+    print(returncode)
+
+
+    #print(starting_point)

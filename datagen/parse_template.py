@@ -4,7 +4,7 @@ import subprocess
 
 from split_reply import split_reply
 
-starting_point = Path(__file__).parent.parent
+starting_point = Path(__file__).parent
 
 
 def parse_template():
@@ -82,37 +82,38 @@ def fill_messages(messages, filename, stub, instructions):
 
 if __name__ == "__main__":
     template_dict_list = parse_template()
-    # fill_messages(messages=template_dict_list, 
-    #             filename="dummy.py", stub="stupoo", instructions="instr bla bla")
 
-    tasks = [
-    {
-        "filename": "greet.py",
-        "stub": "def greet(name):\n    pass",
-        "instructions": "# Instructions\n\nReturn 'Hello, <name>!'.",
-    },
-    {
-        "filename": "add.py",
-        "stub": "# [[FILENAME]]\ndef add(a, b):\n    pass",
-        "instructions": "# Instructions\n\nReturn the sum of a and b.",
-    },
-]
+    fill_messages(messages=template_dict_list, 
+                filename="dummy.py", stub="stupoo", instructions="instr bla bla")
 
-
-    final_dict_list = []
-    kept = 0
-    skipped = 0
-    for t in tasks:
-        try:
-            updated_dict_list = fill_messages(template_dict_list, t["filename"], t["stub"], t["instructions"])
-            final_dict_list.append(updated_dict_list)
-            add += 1
+#     tasks = [
+#     {
+#         "filename": "greet.py",
+#         "stub": "def greet(name):\n    pass",
+#         "instructions": "# Instructions\n\nReturn 'Hello, <name>!'.",
+#     },
+#     {
+#         "filename": "add.py",
+#         "stub": "# [[FILENAME]]\ndef add(a, b):\n    pass",
+#         "instructions": "# Instructions\n\nReturn the sum of a and b.",
+#     },
+# ]
 
 
-        except ValueError as e:
-            print(f"{t["filename"]} has issues: {e}")
-            skipped += 1
-            continue
+#     final_dict_list = []
+#     kept = 0
+#     skipped = 0
+#     for t in tasks:
+#         try:
+#             updated_dict_list = fill_messages(template_dict_list, t["filename"], t["stub"], t["instructions"])
+#             final_dict_list.append(updated_dict_list)
+#             add += 1
+
+
+#         except ValueError as e:
+#             print(f"{t["filename"]} has issues: {e}")
+#             skipped += 1
+#             continue
 
     #print(final_dict_list)
-    print(f"in total {kept} have been kept and {skipped} have been skipped")
+    # print(f"in total {kept} have been kept and {skipped} have been skipped")

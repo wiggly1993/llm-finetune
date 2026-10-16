@@ -47,7 +47,7 @@ def split_reply(text):
 
 if __name__ == "__main__":
     starting_point = Path(__file__).parent
-    full_path = starting_point / "raw" / "test_1.txt"
+    full_path = starting_point / "python" / "python_1.txt"
     with open(full_path) as f:
         raw_ds_output = f.read()
     

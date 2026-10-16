@@ -49,52 +49,53 @@ if __name__ == "__main__":
     ###### play times here ######
     # this is the templated based base. we will fill in the missing stuff based on a 
     # deepseek reply
-    lang = "java"
+    langs = ["cpp", "go", "java", "javascript", "python", "rust"]
     base_dict_list = parse_template()
 
     kept, skipped = 0, 0
 
     # prepare the .jsonl file where we will contain all the fine-tune samples
     starting_point = Path(__file__).parent
-
-    full_out_path = starting_point / "out" / f"{lang}_pilot.jsonl"
     counter_dict = {}
 
-    with open(full_out_path, "w") as out:
+    for lang in langs:
+        full_out_path = starting_point / "out" / f"{lang}_pilot.jsonl"
+        with open(full_out_path, "w") as out:
 
-        for p in Path(starting_point / "raw" / lang).glob("*.txt"):
-            print(f"processing: {p}")
-            with open(p) as f:
-                raw_ds_output = f.read()
+            for p in Path(starting_point / "raw" / lang).glob("*.txt"):
+                print(f"processing: {p}")
+                with open(p) as f:
+                    raw_ds_output = f.read()
 
-            try:
-                # dictionary with unique ds replies chopped into indiv. entries
-                deepseek_parts = split_reply(text=raw_ds_output)
+                try:
+                    # dictionary with unique ds replies chopped into indiv. entries
+                    deepseek_parts = split_reply(text=raw_ds_output)
 
-                # clean these parts so diff apply does not fail
-                deepseek_parts["stub"] = washer(deepseek_parts["stub"])
-                deepseek_parts["solution"] = washer(deepseek_parts["solution"])
+                    # clean these parts so diff apply does not fail
+                    deepseek_parts["stub"] = washer(deepseek_parts["stub"])
+                    deepseek_parts["solution"] = washer(deepseek_parts["solution"])
 
-                # we run the deepseek parts through our validation tests
-                value, info_text = task_is_good(deepseek_parts)
-                if not value:
-                    print(f"{p} file was fucked up. {info_text}")
+                    # we run the deepseek parts through our validation tests
+                    value, info_text = task_is_good(deepseek_parts, lang)
+                    if not value:
+                        print(f"{p} file was fucked up. {info_text}")
+                        skipped += 1
+                        counter_dict.setdefault(lang, {})
+                        counter_dict[lang][info_text] = counter_dict[lang].get(info_text, 0) + 1
+                        continue
+
+                    # run the core file that creates the record ({"messages": filled_d}) we need for training 
+                    record = build_record(base_dict_list, deepseek_parts)
+
+                    out.write(json.dumps(record) + "\n")
+
+
+
+                    kept += 1
+
+                except Exception as e:
+                    print(p.name, e)
                     skipped += 1
-                    counter_dict[info_text] = counter_dict.get(info_text, 0) + 1
-                    continue
-
-                # run the core file that creates the record ({"messages": filled_d}) we need for training 
-                record = build_record(base_dict_list, deepseek_parts)
-
-                out.write(json.dumps(record) + "\n")
-
-
-
-                kept += 1
-
-            except Exception as e:
-                print(p.name, e)
-                skipped += 1
 
 
     print(f"kept: {kept}, skipped: {skipped}")
