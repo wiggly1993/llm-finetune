@@ -5,6 +5,7 @@ work/*
 !work/.gitkeep
 out/*
 !out/.gitkeep
+!out/combined.jsonl
 *_local/
 node_modules/
 datagen_venv/

@@ -1,0 +1,1 @@
+{"cpp": {"solution fails tests ": 34, "Plan is too long": 2}, "go": {"solution fails tests ": 31}, "java": {"solution fails tests ": 40, "Plan is too long": 4}, "javascript": {"Plan is too long": 6, "solution fails tests ": 41, "timeout error": 1}, "python": {"solution fails tests ": 26, "Plan is too long": 2}, "rust": {"solution fails tests ": 33, "Plan is too long": 3}}

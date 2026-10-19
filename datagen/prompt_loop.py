@@ -96,7 +96,7 @@ def generate_all(per_lang, topics, difficulties):
 
 
 if __name__ == "__main__":
-    generate_all(100, topics, difficulties)
+    generate_all(500, topics, difficulties)
     #print("hi")
 
 
