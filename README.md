@@ -13,7 +13,7 @@ Budget: $100 total. Hardware: rented Vast.ai GPUs (RTX 2080 Ti for runs 1-2, RTX
 All scores are `pass_rate_2` on the full 225-case benchmark, one run each (single runs are noisy, roughly +/- 0.5 points).
 
 | Model | Edit format | Pass rate 2 | Passed | Well-formed |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Base | udiff | 2.7% | 6/225 | n/a |
 | Base (re-run, final harness) | udiff | **2.2%** | 5/225 | 48.9% |
 | run1 (commit message to diff) | udiff | 1.8% | 4/225 | n/a |
@@ -28,11 +28,12 @@ Success rule set before training: average of several runs, at least 3 points ove
 
 ```
 llm-finetune/
-  datagen/     synthetic data generation + validation (DeepSeek V3)
+  datagen/     synthetic data generation + validation (DeepSeek API)
   data/        final run3 data: train.jsonl (2360 rows), val.jsonl (417 rows)
   training/    QLoRA training, merging, data prep scripts
   results/     aider benchmark stats for base and run3 (merged)
   log.txt      working log
+
 ```
 
 Not in the repo (too large): base model, adapters, merged weights. Adapters live on HuggingFace under `wiggly1993/qwen7b-lora-adapters` (`run1/`, `run3/`).
@@ -45,9 +46,9 @@ Not in the repo (too large): base model, adapters, merged weights. Adapters live
 
 Source: `bigcode/commitpackft`, cleaned and filtered to the six benchmark languages, ~112k training rows.
 
-- Cleaning: removed whitespace-only and comment-only diffs, converted diffs to Aider's udiff format (`@@ ... @@` without line numbers, wrapped in a ```` ```diff ```` fence).
-- run1 input: commit message. run2 input: commit message + file name + old file contents. Target: the diff.
-- Why it failed: commit data teaches *small edits to existing files*. Aider Polyglot asks for *an empty stub turned into a full solution*. Wrong skill.
+* Cleaning: removed whitespace-only and comment-only diffs, converted diffs to Aider's udiff format (`@@ ... @@` without line numbers, wrapped in a ````diff` fence).
+* run1 input: commit message. run2 input: commit message + file name + old file contents. Target: the diff.
+* Why it failed: commit data teaches *small edits to existing files*. Aider Polyglot asks for *an empty stub turned into a full solution*. Wrong skill.
 
 ### Run 3: synthetic, benchmark-shaped data
 
@@ -57,46 +58,77 @@ Idea: have a strong model write new Exercism-style exercises, keep only the ones
 
 #### 1) Generation
 
-1. **Generate.** DeepSeek V3 is called once per task with a seed (language, topic, difficulty) so tasks do not all look alike. Each reply contains five delimited sections: `===INSTRUCTIONS===`, `===STUB===`, `===SOLUTION===`, `===TESTS===`, `===PLAN===`. DeepSeek never writes the diff. It is told not to copy existing Exercism exercises and to use the standard library only.
-2. **Split** the reply by the delimiters.
+1. **Generate.** The DeepSeek API (`deepseek-flash`, thinking enabled, reasoning effort high, 70 s timeout) is called once per task using a randomly picked topic (from 12 topics) and difficulty (from 3 difficulties) so tasks do not all look alike. Each reply contains six delimited sections: `===INSTRUCTIONS===`, `===STUB===`, `===SOLUTION===`, `===TESTS===`, `===PLAN===`, `===FILENAME===`. DeepSeek never writes the diff. It is asked to write a brand new exercise "in the style of Exercism" (no example exercise is included in the prompt) and to use the standard library only.
+2. **Split** the reply by the delimiters using `get_section`.
 
-#### 2) Testing
+#### 2) Validation & Filtering
 
-3. **Validate by execution.** Solution + tests are written to a temp folder and run. **Only passing samples are kept. The check was never loosened.**
+Tasks undergo strict validation in a specific order (tracked via rejection counts in `score.json`):
+
+1. **Diff applies cleanly.** A local script produces the udiff from stub to solution (full block replacement, `@@ ... @@`, no context lines). An apply check verifies that the generated diff applies cleanly to the stub using Aider's parser.
+2. **Plan check.** The short plan is rejected if it contains a code fence, mentions tests, or is too long (max 130 words, plain text; the filter allows up to 140 words).
+3. **Validate by execution.** Solution + tests are written to a temp folder and run (with a 120 s timeout per task using `SIGALRM`). **Only passing samples are kept. The check was never loosened.**
 4. **Stub must fail.** The same tests are run against the stub. If the stub passes, the task is trivial and is dropped.
-5. **Plan check.** The short plan is rejected if it contains a code fence or is too long (max ~120 words, plain text).
 
 #### 3) Final preparations
 
-6. **Build the diff ourselves.** A local script produces the udiff from stub to solution (full block replacement, `@@ ... @@`, no context lines). No AI is involved here, which guarantees the format.
-7. **Wrap in Aider's real turn-1 layout:** fixed system prompt with udiff rules, the fixed sympy example chat, the file stub in a code fence, the instructions, and the fixed "use the above instructions to modify the supplied files" tail. Tests are never shown to the model.
-8. **Training target** (the only part with loss): `Ok, I will:` + a short numbered plan + the ```` ```diff ```` block.
+5. **Wrap in Aider's real turn-1 layout:** fixed system prompt with udiff rules, the fixed sympy example chat, the file stub in a code fence, the instructions, and the fixed "use the above instructions to modify the supplied files" tail. Tests are never shown to the model.
+6. **Training target** (the only part with loss): `Ok, I will:` + a short numbered plan + `Here are the diffs for those changes:` + the ````diff` block + `<|im_end|>`.
 
 **Output:** 2777 validated samples, split 2360 train / 417 val. Cost for the DeepSeek calls: roughly $20.
 
-**Scripts in `datagen/`**
+**Scripts in `datagen/**`
 
-| Script | Role |
-|---|---|
-| `hi_deepseek.py` | DeepSeek API connectivity test [confirm] |
-| `prompt_builder.py` | builds the generation prompt (seed + format example) [confirm] |
-| `prompt_loop.py` | loops generation over seeds / languages [confirm] |
-| `split_reply.py` | splits the model reply into the five sections |
-| `section_stripping.py` | cleans section contents (fences, whitespace) [confirm] |
-| `task_filter.py` | filters bad / duplicate tasks before validation [confirm] |
-| `validate.py` | runs solution vs tests, stub vs tests, keeps passes only |
-| `validity_loop.py` | runs validation over all generated tasks [confirm] |
-| `parse_template.py` | parses Aider's message template for the wrapper [confirm] |
-| `apply_check.py` | checks that the built diff applies cleanly to the stub (Aider's parser) [confirm] |
-| `experiments.py` | scratch experiments |
+| Script | Role / What it does |
+| --- | --- |
+| `hi_deepseek.py` | `deepseek_interaction(input_text)`: one streaming call to the DeepSeek API (`deepseek-flash`, thinking enabled, reasoning effort high, 70 s timeout). Returns the full reply text. |
+| `prompt_builder.py` | Holds 12 topics and 3 difficulties. `prompt_builder(...)` builds the generation prompt for six sections (`===INSTRUCTIONS===`, `===STUB===`, `===SOLUTION===`, `===TESTS===`, `===PLAN===`, `===FILENAME===`), no code fences, plan max 130 words, plan must never mention tests. |
+| `prompt_loop.py` | `generate_all(per_lang, topics, difficulties)`: picks random topic + difficulty, adds language-specific extras (Java: CamelCase file name; C++: Catch2 header; JavaScript: CommonJS `module.exports`), calls DeepSeek and saves raw reply to `raw/<lang>/<lang>_<i>.txt`. Skips existing files so it can be resumed. |
+| `section_stripping.py` | `get_section(text, start, end)`: cuts text between two delimiters and strips whitespace. |
+| `split_reply.py` | `split_reply(text)`: uses `get_section` for every delimiter pair and returns one dict (`instructions`, `stub`, `solution`, `tests`, `plan`, `filename`). |
+| `parse_template.py` | `parse_template()`: reads `golden/template.md` (Aider's fixed turn-1 chat: system prompt, sympy example, etc.) into messages. `fill_messages(...)` replaces placeholders (`[[FILENAME]]`, `[[INSTRUCTIONS]]`, `[[STUB]]`) and raises an error if any remain. |
+| `apply_check.py` | `diff_applies(d)`: checks that the diff built from the DeepSeek parts applies cleanly using Aider's parser. |
+| `validate.py` | `run_<lang>_ds_tests(...)` for all six languages (Java: `javac` + JUnit console jar, 60 s timeouts). Solution must pass and stub must fail. Builds our own udiff. |
+| `task_filter.py` | `task_is_good(d, lang)`: runs the checks in order (diff applies, plan valid, tests valid) and returns the failure reason on rejection. |
+| `validity_loop.py` | Main loop script. For each language: loads raw replies, splits them, strips trailing whitespace, runs `task_is_good`, builds records and writes to `out/<lang>_pilot.jsonl`. Each task has a 120 s timeout (`SIGALRM`). Rejections are counted per language and reason in `score.json`. |
+| `experiments.py` | Scratch experiments. |
 
-`catch2_local/` and `junit_local/` hold local C++ / Java test dependencies (git-ignored). `raw/`, `work/`, `out/` are git-ignored intermediates (lost with the instance, not needed).
+`catch2_local/` and `junit_local/` hold local C++ (Catch2) and Java (JUnit console jar) test dependencies (git-ignored). `raw/`, `work/`, `out/` are git-ignored intermediates (lost with the instance, not needed).
+
+**`apply_check.py` Snippet**
+
+```python
+def diff_applies(d):
+    diff = build_diff(stub=d["stub"], solution=d["solution"], filename=d["filename"])
+
+    aider_list = find_diffs(diff)
+
+    file_path = aider_list[0][0]
+    hunk = aider_list[0][1]
+
+    hunk = normalize_hunk(hunk)
+
+    new_text = do_replace(Path(file_path), d["stub"] + "\n", hunk)
+
+    if new_text == d["solution"] + "\n":
+        return True
+    else:
+        return False
+
+```
+
+**`score.json` Rejection Breakdown Example**
+
+```json
+{"cpp": {"solution fails tests ": 34, "Plan is too long": 2}, "go": {"solution fails tests ": 31}, "java": {"solution fails tests ": 40, "Plan is too long": 4}, "javascript": {"Plan is too long": 6, "solution fails tests ": 41, "timeout error": 1}, "python": {"solution fails tests ": 26, "Plan is too long": 2}, "rust": {"solution fails tests ": 33, "Plan is too long": 3}}
+
+```
 
 **Known limits of the data**
 
-- Turn 1 only. Turn 2 (retry after test errors) is not trained.
-- Contamination check against the Polyglot test set was skipped (deliberate decision).
-- Whether short reasoning helps a 7B model is untested here (hypothesis taken from PewDiePie's video).
+* Turn 1 only. Turn 2 (retry after test errors) is not trained.
+* Contamination check against the Polyglot test set was skipped (deliberate decision).
+* Whether short reasoning helps a 7B model is untested here (hypothesis taken from PewDiePie's video).
 
 ---
 
@@ -104,8 +136,8 @@ Idea: have a strong model write new Exercism-style exercises, keep only the ones
 
 All runs: Unsloth + TRL `SFTTrainer`, QLoRA (4-bit base, LoRA adapters), loss only on the assistant answer.
 
-| | run1 | run2 | run3 |
-|---|---|---|---|
+|  | run1 | run2 | run3 |
+| --- | --- | --- | --- |
 | Data | commitpackft | commitpackft + old file | synthetic (2360 rows) |
 | GPU | RTX 2080 Ti | RTX 2080 Ti | RTX 3090 |
 | Precision | fp16 | fp16 | bf16 |
@@ -129,19 +161,19 @@ All runs: Unsloth + TRL `SFTTrainer`, QLoRA (4-bit base, LoRA adapters), loss on
 
 ## 3. Evaluation setup
 
-- Aider benchmark harness from `Aider-AI/aider` with `Aider-AI/polyglot-benchmark` (not `clone-exercism.sh`), no Docker (`AIDER_DOCKER=1`).
-- Model served with vLLM 0.26.0 (OpenAI-compatible API), `--max-model-len 16384`, `max_new_tokens 2048`.
-- Command: `benchmark.py RUN --edit-format udiff --threads 1 --keywords python,javascript,cpp,rust,go,java`
-- Every run checked before trusting it: 225 result files, **0 exceptions**, all six languages present.
+* Aider benchmark harness from `Aider-AI/aider` with `Aider-AI/polyglot-benchmark` (not `clone-exercism.sh`), no Docker (`AIDER_DOCKER=1`).
+* Model served with vLLM 0.26.0 (OpenAI-compatible API), `--max-model-len 16384`, `max_new_tokens 2048`.
+* Command: `benchmark.py RUN --edit-format udiff --threads 1 --keywords python,javascript,cpp,rust,go,java`
+* Every run checked before trusting it: 225 result files, **0 exceptions**, all six languages present.
 
 **Harness traps that produce fake scores** (all hit and fixed):
 
-- Missing `go`, `cargo`, `java` makes those languages fail silently as fake 0%.
-- JS needs `/npm-install` (normally built by Aider's Docker image) and a `/aider` symlink, otherwise `npm-test.sh` is not found.
-- `--keywords java` also matches `javascript`. Use `java/exercises` for single-language checks.
-- Recursive glob `**` over the run directory loops through the `node_modules` symlink and hangs.
-- Too small a context cap (6144) produced fake `exhausted_context_windows`.
-- Hangs (litellm timeout) are resumed with `--cont` and the same run name.
+* Missing `go`, `cargo`, `java` makes those languages fail silently as fake 0%.
+* JS needs `/npm-install` (normally built by Aider's Docker image) and a `/aider` symlink, otherwise `npm-test.sh` is not found.
+* `--keywords java` also matches `javascript`. Use `java/exercises` for single-language checks.
+* Recursive glob `**` over the run directory loops through the `node_modules` symlink and hangs.
+* Too small a context cap (6144) produced fake `exhausted_context_windows`.
+* Hangs (litellm timeout) are resumed with `--cont` and the same run name.
 
 ---
 
@@ -150,7 +182,7 @@ All runs: Unsloth + TRL `SFTTrainer`, QLoRA (4-bit base, LoRA adapters), loss on
 Final comparison, same harness, same server settings, udiff, 225 cases, 0 exceptions:
 
 | Metric | Base | run3 (merged) |
-|---|---|---|
+| --- | --- | --- |
 | pass_rate_1 | 1.8% (4) | 1.8% (4) |
 | pass_rate_2 | 2.2% (5) | 1.8% (4) |
 | well-formed cases | 48.9% | 75.1% |
@@ -162,10 +194,10 @@ Base `whole` per language (earlier run): cpp 0/26, go 1/39, java 1/47, js 3/49, 
 
 **Reading the result**
 
-- Synthetic data fixed the *format*: well-formed diffs rose from 49% to 75%.
-- It did not fix the *solving*: passed exercises stayed at 4-5 of 225. The difference between 5 and 4 is one case, i.e. noise.
-- Exhausted context windows doubled, so run3 may loop or ramble more in retries (turn 2 was never trained).
-- Same pattern as in PewDiePie's 32B project: a format fix alone gives no gain.
+* Synthetic data fixed the *format*: well-formed diffs rose from 49% to 75%.
+* It did not fix the *solving*: passed exercises stayed at 4-5 of 225. The difference between 5 and 4 is one case, i.e. noise.
+* Exhausted context windows doubled, so run3 may loop or ramble more in retries (turn 2 was never trained).
+* Same pattern as in PewDiePie's 32B project: a format fix alone gives no gain.
 
 ---
 
@@ -178,13 +210,15 @@ Base `whole` per language (earlier run): cpp 0/26, go 1/39, java 1/47, js 3/49, 
 5. **Average several runs.** This project ran each configuration once because of budget, so differences below ~1 point are not meaningful.
 6. **Synthetic data is not cheap at scale.** ~$20 for ~2.8k validated samples makes 15k samples roughly $80+, which exceeded the budget.
 
+---
+
 ## 6. What would come next (not done)
 
-- Scale the validated synthetic set (~15k) and add a final small round of top-quality samples.
-- Train turn 2 (retry after test errors).
-- Contamination check against Polyglot.
-- Try a larger base (14B) if it fits the budget.
-- Several benchmark runs per model, averaged.
+* Scale the validated synthetic set (~15k) and add a final small round of top-quality samples.
+* Train turn 2 (retry after test errors).
+* Contamination check against Polyglot.
+* Try a larger base (14B) if it fits the budget.
+* Several benchmark runs per model, averaged.
 
 ---
 
