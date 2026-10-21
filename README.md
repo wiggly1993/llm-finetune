@@ -14,7 +14,6 @@ All scores are `pass_rate_2` on the full 225-case benchmark, one run each (singl
 
 | Model | Edit format | Pass rate 2 | Passed | Well-formed |
 |---|---|---|---|---|
-| Base | whole | 2.2% | 5/225 | n/a |
 | Base | udiff | 2.7% | 6/225 | n/a |
 | Base (re-run, final harness) | udiff | **2.2%** | 5/225 | 48.9% |
 | run1 (commit message to diff) | udiff | 1.8% | 4/225 | n/a |
@@ -56,11 +55,19 @@ Idea: have a strong model write new Exercism-style exercises, keep only the ones
 
 **Pipeline**
 
+#### 1) Generation
+
 1. **Generate.** DeepSeek V3 is called once per task with a seed (language, topic, difficulty) so tasks do not all look alike. Each reply contains five delimited sections: `===INSTRUCTIONS===`, `===STUB===`, `===SOLUTION===`, `===TESTS===`, `===PLAN===`. DeepSeek never writes the diff. It is told not to copy existing Exercism exercises and to use the standard library only.
 2. **Split** the reply by the delimiters.
+
+#### 2) Testing
+
 3. **Validate by execution.** Solution + tests are written to a temp folder and run. **Only passing samples are kept. The check was never loosened.**
 4. **Stub must fail.** The same tests are run against the stub. If the stub passes, the task is trivial and is dropped.
 5. **Plan check.** The short plan is rejected if it contains a code fence or is too long (max ~120 words, plain text).
+
+#### 3) Final preparations
+
 6. **Build the diff ourselves.** A local script produces the udiff from stub to solution (full block replacement, `@@ ... @@`, no context lines). No AI is involved here, which guarantees the format.
 7. **Wrap in Aider's real turn-1 layout:** fixed system prompt with udiff rules, the fixed sympy example chat, the file stub in a code fence, the instructions, and the fixed "use the above instructions to modify the supplied files" tail. Tests are never shown to the model.
 8. **Training target** (the only part with loss): `Ok, I will:` + a short numbered plan + the ```` ```diff ```` block.
