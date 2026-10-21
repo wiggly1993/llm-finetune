@@ -77,7 +77,7 @@ Tasks undergo strict validation in a specific order (tracked via rejection count
 
 **Output:** 2777 validated samples, split 2360 train / 417 val. Cost for the DeepSeek calls: roughly $20.
 
-**Scripts in `datagen/`** (roughly in the order they are used)
+## **Scripts in `datagen/`** (roughly in the order they are used)
 
 **Step 1: generating the raw samples**
 
