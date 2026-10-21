@@ -77,23 +77,38 @@ Tasks undergo strict validation in a specific order (tracked via rejection count
 
 **Output:** 2777 validated samples, split 2360 train / 417 val. Cost for the DeepSeek calls: roughly $20.
 
-**Scripts in `datagen/**`
+**Scripts in `datagen/`** (roughly in the order they are used)
 
-| Script | Role / What it does |
-| --- | --- |
-| `hi_deepseek.py` | `deepseek_interaction(input_text)`: one streaming call to the DeepSeek API (`deepseek-flash`, thinking enabled, reasoning effort high, 70 s timeout). Returns the full reply text. |
-| `prompt_builder.py` | Holds 12 topics and 3 difficulties. `prompt_builder(...)` builds the generation prompt for six sections (`===INSTRUCTIONS===`, `===STUB===`, `===SOLUTION===`, `===TESTS===`, `===PLAN===`, `===FILENAME===`), no code fences, plan max 130 words, plan must never mention tests. |
-| `prompt_loop.py` | `generate_all(per_lang, topics, difficulties)`: picks random topic + difficulty, adds language-specific extras (Java: CamelCase file name; C++: Catch2 header; JavaScript: CommonJS `module.exports`), calls DeepSeek and saves raw reply to `raw/<lang>/<lang>_<i>.txt`. Skips existing files so it can be resumed. |
-| `section_stripping.py` | `get_section(text, start, end)`: cuts text between two delimiters and strips whitespace. |
-| `split_reply.py` | `split_reply(text)`: uses `get_section` for every delimiter pair and returns one dict (`instructions`, `stub`, `solution`, `tests`, `plan`, `filename`). |
-| `parse_template.py` | `parse_template()`: reads `golden/template.md` (Aider's fixed turn-1 chat: system prompt, sympy example, etc.) into messages. `fill_messages(...)` replaces placeholders (`[[FILENAME]]`, `[[INSTRUCTIONS]]`, `[[STUB]]`) and raises an error if any remain. |
-| `apply_check.py` | `diff_applies(d)`: checks that the diff built from the DeepSeek parts applies cleanly using Aider's parser. |
-| `validate.py` | `run_<lang>_ds_tests(...)` for all six languages (Java: `javac` + JUnit console jar, 60 s timeouts). Solution must pass and stub must fail. Builds our own udiff. |
-| `task_filter.py` | `task_is_good(d, lang)`: runs the checks in order (diff applies, plan valid, tests valid) and returns the failure reason on rejection. |
-| `validity_loop.py` | Main loop script. For each language: loads raw replies, splits them, strips trailing whitespace, runs `task_is_good`, builds records and writes to `out/<lang>_pilot.jsonl`. Each task has a 120 s timeout (`SIGALRM`). Rejections are counted per language and reason in `score.json`. |
-| `experiments.py` | Scratch experiments. |
+**Step 1: generating the raw samples**
 
-`catch2_local/` and `junit_local/` hold local C++ (Catch2) and Java (JUnit console jar) test dependencies (git-ignored). `raw/`, `work/`, `out/` are git-ignored intermediates (lost with the instance, not needed).
+- `hi_deepseek.py`: sends a prompt to the DeepSeek model and catches the model's full answer as text (`deepseek_interaction`). Every generated sample in the project goes through this one function.
+- `prompt_builder.py`: builds the full prompt that is passed into `hi_deepseek.py`. The prompt tells DeepSeek to reply with six sections: instructions, stub, solution, tests, plan and filename. Later steps make sure the generated answer actually has these six sections.
+- `prompt_loop.py`: the main generation script. It produces 500 samples per language (about 3,000 across the six languages). For each sample it picks a different topic and difficulty, builds the prompt with `prompt_builder.py`, sends it through `deepseek_interaction` from `hi_deepseek.py`, and saves the raw answer as a text file in `raw/<language>/`. Files that already exist are skipped, so the loop can be restarted.
+
+**Step 2: breaking the raw answers apart**
+
+- `section_stripping.py`: cuts out the text between two section markers (`get_section`). It is the helper that `split_reply.py` uses to separate one section from the next.
+- `split_reply.py`: takes the raw text of one generated sample and turns it into a dictionary where each key is one section (instructions, stub, solution, tests, plan, filename). We need this because every later step works on the individual parts, for example the solution is run against the tests, and the stub is placed into the training prompt.
+
+**Step 3: preparing Aider's message layout**
+
+- `parse_template.py`: reads `golden/template.md`, which holds Aider's fixed turn-1 conversation (system prompt, sympy example chat, etc.), and turns it into a list of messages. It then fills the placeholders (filename, instructions, stub) with the content of one sample. This is how every sample ends up in exactly the layout Aider sends to the model.
+
+**Step 4: quality checks**
+
+- `validate.py`: contains the heavy checks.
+  - `tests_validation` is the most important one: the solution must pass the tests and the stub must fail them. It runs the real test tooling for all six languages.
+  - `plan_validation` makes sure the plan is short and has no code fence.
+  - `build_diff` builds the udiff from stub to solution ourselves, so the diff format is guaranteed.
+- `apply_check.py`: contains the `diff_applies` check, which makes sure the diff of a sample applies.
+- `task_filter.py`: the overall filter. `task_is_good` runs one sample through all three checks (diff applies, plan validation, tests validation) and only returns True if every check passes. The tests check lives in `validate.py`, the plan check also in `validate.py`, and the diff check in `apply_check.py`.
+- `validity_loop.py`: runs the filter over all ~3,000 raw files, one language at a time. Samples that pass are turned into final training records (the Aider layout plus the target answer) and written to `out/<language>_pilot.jsonl`. Rejected samples are counted per language and reason in `score.json`, and each task has a 120 s timeout. On top of the loop it has two small helpers: `build_answer` (plan + diff become the target answer) and `washer` (removes trailing whitespace).
+
+**Other**
+
+- `experiments.py`: scratch experiments [confirm].
+
+`catch2_local/` and `junit_local/` hold the local C++ (Catch2) and Java (JUnit) test dependencies (git-ignored). `raw/`, `work/`, `out/` are git-ignored intermediates.
 
 **`apply_check.py` Snippet**
 
