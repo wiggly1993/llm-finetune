@@ -1,0 +1,31 @@
+───────────────── tmp.benchmarks/2026-10-20-18-21-54--run3-merged-udiff-b ──────────────────
+- dirname: 2026-10-20-18-21-54--run3-merged-udiff-b
+  test_cases: 225
+  model: openai/run3-merged
+  edit_format: udiff
+  commit_hash: 5dc9490
+  pass_rate_1: 1.8
+  pass_rate_2: 1.8
+  pass_num_1: 4
+  pass_num_2: 4
+  percent_cases_well_formed: 75.1
+  error_outputs: 345
+  num_malformed_responses: 292
+  num_with_malformed_responses: 56
+  user_asks: 155
+  lazy_comments: 0
+  syntax_errors: 0
+  indentation_errors: 0
+  exhausted_context_windows: 53
+  prompt_tokens: 3686363
+  completion_tokens: 583105
+  test_timeouts: 4
+  total_tests: 225
+  command: aider --model openai/run3-merged
+  date: 2026-10-20
+  versions: 0.86.3.dev
+  seconds_per_case: 68.5
+  total_cost: 0.0000
+
+costs: $0.0000/test-case, $0.00 total, $0.00 projected
+────────────────────────────────────────────────────────────────────────────────────────────

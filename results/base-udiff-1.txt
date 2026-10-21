@@ -1,0 +1,33 @@
+───────────────────── tmp.benchmarks/2026-10-20-09-29-46--base-udiff-1 ─────────────────────
+- dirname: 2026-10-20-09-29-46--base-udiff-1
+  test_cases: 225
+  model: 
+openai//workspace/models/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f
+1eca0bb1891e29f1db0e242
+  edit_format: udiff
+  commit_hash: 5dc9490
+  pass_rate_1: 1.8
+  pass_rate_2: 2.2
+  pass_num_1: 4
+  pass_num_2: 5
+  percent_cases_well_formed: 48.9
+  error_outputs: 476
+  num_malformed_responses: 449
+  num_with_malformed_responses: 115
+  user_asks: 375
+  lazy_comments: 0
+  syntax_errors: 0
+  indentation_errors: 0
+  exhausted_context_windows: 27
+  prompt_tokens: 5169456
+  completion_tokens: 561645
+  test_timeouts: 2
+  total_tests: 225
+  command: aider --model openai//workspace/models/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242
+  date: 2026-10-20
+  versions: 0.86.3.dev
+  seconds_per_case: 65.0
+  total_cost: 0.0000
+
+costs: $0.0000/test-case, $0.00 total, $0.00 projected
+────────────────────────────────────────────────────────────────────────────────────────────
